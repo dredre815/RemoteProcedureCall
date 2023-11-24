@@ -1,0 +1,106 @@
+Name: Zijun Zhang
+Login ID: zijuzhang1
+Student ID: 1160040
+
+1. In this project, the server accepts calls from everyone. In a real-world 
+RPC server, it's better to accept calls only from a subset of users to ensure 
+security and prevent unauthorized access.
+
+2. In the real-world, authentication should be provided by the RPC framework 
+to maintain a consistent security layer across different functions using the 
+framework. For this project, I didn't implement any authentication mechanism.
+
+3. TCP should be used as the transport layer protocol. TCP provides reliable, ordered, 
+and error-checked delivery of data, which is suitable for RPC systems. UDP could be an 
+alternative, but it sacrifices reliability for lower latency, which is not ideal for an 
+RPC system.
+
+4. Sockets should be created in the rpc_init_server() and rpc_init_client() functions, 
+as these functions are responsible for initializing the server and client states.
+
+5. In this project, rpc_client and rpc_server are allocated dynamically. This allows 
+for better flexibility and memory management, as the memory can be released when no 
+longer needed. Statically allocated structures would limit the number of clients and 
+servers to a fixed amount, which is not suitable for dynamic real-world scenarios.
+
+6. If one host uses big-endian and the other uses little-endian, data sent between
+them might be misinterpreted. To address this issue, we should use "network byte order"
+(big-endian) for data transmission, ensuring interoperability between hosts with different 
+byte orders.
+
+Protocol Description:
+
+The application layer protocol uses TCP for communication between the client and the server. 
+TCP is preferred for its reliability and guaranteed delivery, which is crucial for RPC operations. 
+However, TCP might be slower compared to UDP due to its handshake and error checking mechanisms. 
+Nonetheless, the reliability of TCP outweighs its speed disadvantages for this application.
+
+Request/Response Packet:
++----------------+----------------+----------------+------------------------+
+|  Packet Type   |  Message Type  | Payload Length |        Payload         |
+|  (1 byte)      |  (1 byte)      |  (4 bytes)     |  (Variable Length)     |
++----------------+----------------+----------------+------------------------+
+
+The protocol messages consist of:
+
+1. A 1-byte integer for the packet type: 0 for request, 1 for response.
+
+2. A 1-byte integer for the message type: 1 for function lookup, 2 for remote procedure call,
+3 for results, and 4 for errors.
+
+3. A 4-byte integer for the payload length (encoded using network byte order). This length is
+independent of the system's size_t and has an upper limit of 2^32-1 bytes. For the given constraint
+(len < 100 000), this approach is sufficient and simpler to decode than alternatives like Elias
+gamma coding. However, if data2_len exceeds this, an "Overlength error" will be printed on stderr,
+and an error will be returned.
+
+4. The payload, which can include function names, rpc_data structures, or error messages.
+
+In the context of the IP layer, the maximum size of a TCP packet (excluding the TCP and IP headers)
+is 65,507 bytes. If the payload exceeds this, it should be split into multiple packets. TCP ensures
+that these packets are delivered in order and without loss or duplication.
+
+Function Lookup Request:
++----------------+----------------+----------------+------------------------+
+|  Packet Type   |  Message Type  | Payload Length |        Payload         |
+|  0             |  1             |  Length of     |  Function Name         |
+|                |                |  Function Name |                        |
++----------------+----------------+-----------------------------------------+
+
+Function Lookup Response:
++----------------+----------------+----------------+------------------------+
+|  Packet Type   |  Message Type  | Payload Length |        Payload         |
+|  1             |  3 or 4        |  Length of     |  Success Flag +        |
+|                |                |  Payload       |  Function ID (if found)|
++----------------+----------------+-----------------------------------------+
+
+When a client wants to find a function, it sends a message with type 1 and the
+function name as the payload. The server responds with a type 3 message containing
+a success flag (1 if found, 0 if not) and a unique identifier for the function if found.
+
+Remote Procedure Call Request:
++----------------+----------------+----------------+------------------------+
+|  Packet Type   |  Message Type  | Payload Length |        Payload         |
+|  0             |  2             |  Length of     |  Function ID +         |
+|                |                |  Payload       |  rpc_data structure    |
++----------------+----------------+-----------------------------------------+
+
+Remote Procedure Call Response:
++----------------+----------------+----------------+------------------------+
+|  Packet Type   |  Message Type  | Payload Length |        Payload         |
+|  1             |  3 or 4        |  Length of     |  Resulting rpc_data    |
+|                |                |  Payload       |  structure / Error msg |
++----------------+----------------+-----------------------------------------+
+
+For remote procedure calls, the client sends a message with type 2, the unique
+function identifier, and the input rpc_data structure. The server processes the
+call and responds with a type 3 message containing the resulting rpc_data structure
+or a type 4 message in case of errors.
+
+For error handling, the message type 4 is used. The payload in such cases can contain
+a string with the error message. This can include errors like "Overlength error" or
+"Procedure not found".
+
+This design should work correctly even if there are IP layer packet loss and duplication,
+thanks to TCP's error checking and retransmission features. It can also handle the fact
+that IP packets have a maximum allowed size by dividing larger payloads into multiple packets.
