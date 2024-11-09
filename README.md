@@ -18,11 +18,13 @@ This project implements a custom RPC (Remote Procedure Call) system in C that en
 
 ### Protocol Design
 
+```
 The protocol uses a custom packet structure:
 +----------------+----------------+----------------+------------------------+
 | Packet Type | Message Type | Payload Length | Payload |
 | (1 byte)    | (1 byte)     | (4 bytes)      | (Variable Length) |
 +----------------+----------------+----------------+------------------------+
+```
 
 ### Message Types
 - Function Existence Query (1)
